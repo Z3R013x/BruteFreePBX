@@ -6,7 +6,7 @@ Python script I made to brute force a FreePBX, Hopefully it'll be more useful fo
 ## Usage
 
 
-python3 brutefreepbx.py  -t http://targetfreepbx -u users.txt -p ~/seclists/Passwords/Common-Credentials/10-million-password-list-top-100000.txt -w 50 --proxy http://127.0.0.1:8080
+python3 brutefreepbx.py  -t http://targetfreepbx -u users.txt -p ~/seclists/Passwords/Common-Credentials/10-million-password-list-top-100000.txt -w 25 --proxy http://127.0.0.1:8080
 
 -t stands for target
 -u username or usernames file
@@ -18,3 +18,5 @@ python3 brutefreepbx.py  -t http://targetfreepbx -u users.txt -p ~/seclists/Pass
 login path is automatically appended on -t, so don't worry about it
 
 on success prints credentials and response text as well (sometimes I've had false positives)
+
+made for FreePBX 16.0.40.11, for other reasons might require minor tweaks
