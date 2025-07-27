@@ -24,7 +24,22 @@ def read_file_lines(file_path: str) -> List[str]:
 def is_file(path: str) -> bool:
     return os.path.isfile(path)
 
-def attempt_login(target: str, username: str, password: str):
+def test_connection(target: str):
+    post_url = f"{target}/admin/ajax.php?module=userman&command=checkPasswordReminder"
+    proxies = {"http": custom_proxy, "https": custom_proxy} if custom_proxy else None
+    try:
+        requests.post(post_url, timeout=5, proxies=proxies, verify=False)
+    except requests.exceptions.ProxyError:
+        print(f"[!] Proxy unreachable: {custom_proxy}")
+        sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print(f"[!] Target unreachable: {target}")
+        sys.exit(1)
+    except requests.exceptions.RequestException as e:
+        print(f"[!] Connection test failed: {e}")
+        sys.exit(1)
+
+def attempt_login(target: str, username: str, password: str, executor):
     global progress_counter
 
     encoded_password = base64.b64encode(password.encode()).decode()
@@ -42,13 +57,22 @@ def attempt_login(target: str, username: str, password: str):
     proxies = {"http": custom_proxy, "https": custom_proxy} if custom_proxy else None
 
     try:
-        response = requests.post(post_url, headers=headers, data=data, proxies=proxies, verify=False)
+        response = requests.post(post_url, headers=headers, data=data, proxies=proxies, verify=False, timeout=15)
         with progress_lock:
             progress_counter += 1
             print(f"[{progress_counter}/{total_combinations}]", end='\r')
         if response.status_code == 200 and "Invalid Login Credentials" not in response.text:
             print(f"\n[+] SUCCESS: {username}:{password} -> {url_encoded_password}")
             print(response.text)
+    except requests.exceptions.Timeout:
+        print(f"\n[!] Timeout: {username}:{password} — retrying (consider lowering -w)")
+        executor.submit(attempt_login, target, username, password, executor)
+    except requests.exceptions.ProxyError:
+        print(f"\n[!] Proxy error: Cannot reach proxy {custom_proxy}")
+        sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        print(f"\n[!] Connection error: Cannot connect to target {target}")
+        sys.exit(1)
     except:
         with progress_lock:
             progress_counter += 1
@@ -64,7 +88,7 @@ def send_request(target: str, u: str, p: str, w: int):
     with ThreadPoolExecutor(max_workers=w) as executor:
         for username in usernames:
             for password in passwords:
-                executor.submit(attempt_login, target, username, password)
+                executor.submit(attempt_login, target, username, password, executor)
 
 def parse_args():
     global custom_proxy
@@ -94,4 +118,5 @@ def parse_args():
 
 if __name__ == "__main__":
     target, u, p, w = parse_args()
+    test_connection(target)
     send_request(target, u, p, w)
