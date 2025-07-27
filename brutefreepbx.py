@@ -88,7 +88,8 @@ def send_request(target: str, u: str, p: str, w: int):
     with ThreadPoolExecutor(max_workers=w) as executor:
         for username in usernames:
             for password in passwords:
-                executor.submit(attempt_login, target, username, password, executor)
+                executor.submit(lambda u=username, p=password: attempt_login(target, u, p, executor))
+
 
 def parse_args():
     global custom_proxy
